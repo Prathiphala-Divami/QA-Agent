@@ -1,0 +1,155 @@
+PRODUCT SPECIFICATION
+=====================
+Feature   : Insurer Branch Details - Add / Manage Insurer Enhancement
+Story     : IIRM-9566
+Date      : 2026-06-20
+Stakeholders: Madhav (12-May-2026), Surya (13-May-2026)
+
+
+1. BUSINESS PROBLEM
+--------------------
+Insurer details must capture Branch-level information because all IRDAI / Regulatory
+bodies prefer to transact with specific branches. The current "Address Details" section
+does not reflect business context. Wording, structure, and fields must all be updated.
+
+
+2. MANAGE INSURER — LIST / SEARCH PAGE
+----------------------------------------
+
+2.1 Filter Bar
+  - Filters (in order): Organisation, Insurer Name (searchable dropdown),
+    Branch Type, Branch Name (searchable dropdown), Branch Code (searchable dropdown), City
+
+2.2 Results Table
+  - Columns must match filter sequence:
+    Org. | Insurer Name | Branch Type | Branch Name | Branch Code |
+    Address | City | State | Phone
+
+2.3 KPI Cards
+  - Existing KPI cards must respect applied filters
+  - New KPI cards to add (BizDone logic, filter-aware):
+      • Total active policies with insurer
+      • Premium value
+      • Brokerage
+
+
+3. ADD / EDIT INSURER FORM
+---------------------------
+
+3.1 Insurer Details Section
+  Fields:
+    - Insurer Name
+        • Add mode  : User text input
+        • Edit mode : Read-only, no editing allowed
+    - Display Name  : Editable in both Add and Edit
+    - Insurance Company Type (dropdown — existing, continue as-is):
+        • Life Insurance
+        • General Insurance
+        • Health Insurance
+        • Non-Life
+        • Reinsurance
+        • Inactive - Composite Insurance
+    - Type of Company (new dropdown):
+        • PSU
+        • Private
+    - Company Tag   : Default = "Company", disabled field
+    - Logo          : Continue as-is
+
+3.2 HQ Details Section  (New Section)
+  Fields:
+    - Branch Type   : Default = "HQ", non-editable
+    - Branch Code   : User input
+    - Branch Name   : User input
+    - Address Fields: Continue as-is (no change)
+    - Branch Contact (treated as one contact; more can be added via "Add Insurer Contact"):
+        • Contact Name  (NEW field)
+        • Other contact fields: continue as-is
+
+3.3 Branch Details Section  (replaces old "Address Details 1")
+  Fields:
+    - Branch Type (dropdown):
+        • CO  - Corporate Office
+        • HO  - Head Office
+        • DO  - Divisional Office
+        • BO  - Branch Office
+        • AO  - Area Office
+        • RO  - Regional Office
+        • ZO  - Zonal Office
+        • SC  - Service Center
+        • SO  - Satellite Office
+        • FC  - Franchise / Channel Partner Office
+        • Facultative Reinsurance Unit
+        • India Branch Office
+        • Operations Hub
+        • Representative Office
+        • Treaty Management Unit
+        • Underwriting Desk
+        (Note: HQ is excluded from this dropdown — it appears only in HQ Details section)
+    - Branch Code   : User input
+    - Branch Name   : User input
+    - Parent Branch : Dropdown — default = HQ address; user can select any existing branch
+    - Branch Display Name (auto-computed, read-only):
+        = Insurer Name + Branch Code + Branch Name + City
+    - Branch Address Concat (auto-computed):
+        = Branch Code + Branch Name + City
+    - Address Fields: Continue as-is
+    - Branch Contact (treated as one contact; more can be added via "Add Insurer Contact"):
+        • Contact Name  (NEW field)
+        • Other contact fields: continue as-is
+
+3.4 KYC Details Section  (New Section — similar to Company KYC)
+  Fields (add based on bandwidth — minimum 3):
+    - GST Number
+    - TIN Number
+    - PAN Number
+    - Additional KYC fields (if bandwidth allows — complete KYC section)
+
+
+4. DATABASE / TECHNICAL CHANGES
+---------------------------------
+
+4.1 Table: state_gst_details
+  - Add new column: company_type
+      Values: Company | Insurer | TPA | Broker | (extensible for future)
+  - Add audit columns:
+      • Status
+      • Created By
+      • Updated By
+
+4.2 Lookup Values
+  - Add lookup entries for all new Branch Type dropdown values listed in Section 3.3
+  - Add lookup entries for Insurance Company Type if any new values are introduced
+  - Add lookup entries for Type of Company (PSU, Private)
+
+
+5. VIEW INSURER PAGE (Priority 2)
+-----------------------------------
+  - Enhance View Insurer to match View Company layout
+  - Include headings and sub-menu navigation
+  - Wireframe reference: Option-A (Add_Insurer_Details_V4.html — no code reuse)
+
+
+6. ACCEPTANCE CRITERIA
+------------------------
+
+AC-1  : Manage Insurer list page displays filter bar with 6 filters in the defined sequence.
+AC-2  : Filter results table shows the 9 columns in the defined sequence.
+AC-3  : KPI cards (existing + new Premium and Brokerage cards) update when filters are applied.
+AC-4  : Add Insurer form shows three sections: Insurer Details, HQ Details, Branch Details, KYC Details.
+AC-5  : Insurer Name is editable in Add mode and read-only in Edit mode.
+AC-6  : HQ Details section has Branch Type defaulted to "HQ" and non-editable.
+AC-7  : Branch Details section Branch Type dropdown does NOT include "HQ".
+AC-8  : Parent Branch dropdown defaults to HQ and lists all existing branches of that insurer.
+AC-9  : Branch Display Name auto-populates as: Insurer Name + Branch Code + Branch Name + City.
+AC-10 : KYC section captures at minimum GST, TIN, and PAN fields.
+AC-11 : state_gst_details table has new company_type column and audit columns.
+AC-12 : All new Branch Type lookup values are available in the dropdown.
+AC-13 : Contact Name field is present in both HQ Details and Branch Details contact sub-section.
+AC-14 : Type of Company dropdown shows PSU and Private options.
+AC-15 : View Insurer page (Priority 2) renders with headings and sub-menu similar to View Company.
+
+
+7. OUT OF SCOPE
+----------------
+  - No code reference from Add_Insurer_Details_V4.html wireframe (UI reference only)
+  - View Insurer enhancements are Priority 2 and may not be in the current sprint
