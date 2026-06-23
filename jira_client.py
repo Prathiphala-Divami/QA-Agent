@@ -133,6 +133,47 @@ def create_issue(payload: dict) -> dict:
         return r.json()
 
 
+def resolve_bug_issuetype(story_key: str) -> str:
+    """Return the best available issue type name for bugs in this project."""
+    project_key = _get_project_key_from_issue(story_key)
+    client, api = _client_for(story_key)
+    try:
+        with client as c:
+            r = c.get(f"{api}/issue/createmeta", params={"projectKeys": project_key, "expand": "projects.issuetypes"})
+            r.raise_for_status()
+            projects = r.json().get("projects", [])
+            if projects:
+                names = [it["name"] for it in projects[0].get("issuetypes", [])]
+                for candidate in ("Bug", "Task", "Story"):
+                    if candidate in names:
+                        return candidate
+    except Exception:
+        pass
+    return "Task"
+
+
+def create_issue_for(story_key: str, payload: dict) -> dict:
+    """Create an issue on the same Jira instance as story_key."""
+    client, api = _client_for(story_key)
+    with client as c:
+        r = c.post(f"{api}/issue", json=payload)
+        r.raise_for_status()
+        return r.json()
+
+
+def link_issues_for(story_key: str, inward_key: str, outward_key: str, link_type: str = "Relates") -> None:
+    """Link two issues on the same Jira instance as story_key."""
+    client, api = _client_for(story_key)
+    payload = {
+        "type": {"name": link_type},
+        "inwardIssue": {"key": inward_key},
+        "outwardIssue": {"key": outward_key},
+    }
+    with client as c:
+        r = c.post(f"{api}/issueLink", json=payload)
+        r.raise_for_status()
+
+
 def get_issue(issue_key: str) -> dict:
     client, api = _client_for(issue_key)
     with client as c:

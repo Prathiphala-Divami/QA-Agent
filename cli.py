@@ -37,6 +37,7 @@ def _build_bug_payload(
 ) -> dict:
     """Build a Jira bug creation payload from a parsed bug dict."""
     from config import settings
+    project_key = story_key.split("-")[0] if story_key else settings.jira_project_key
 
     extra_content = []
     if tc_title:
@@ -74,10 +75,12 @@ def _build_bug_payload(
     if cycle_name:
         labels.append(f"cycle-{cycle_name.lower().replace(' ', '-')}")
 
+    issuetype_name = jira.resolve_bug_issuetype(story_key) if story_key else "Bug"
+
     payload: dict = {
         "fields": {
-            "project": {"key": settings.jira_project_key},
-            "issuetype": {"name": "Bug"},
+            "project": {"key": project_key},
+            "issuetype": {"name": issuetype_name},
             "summary": parsed["summary"],
             "description": description_body,
             "priority": {"name": parsed.get("priority", "Medium")},
@@ -183,12 +186,12 @@ def cmd_log_bug(story_key: str | None, spec_file: str | None):
     print("\n[2/2] Creating bug in Jira...")
     try:
         payload = _build_bug_payload(parsed, story_key)
-        result = jira.create_issue(payload)
+        result = jira.create_issue_for(story_key, payload) if story_key else jira.create_issue(payload)
         bug_key = result["key"]
 
         if story_key:
             try:
-                jira.link_issues(bug_key, story_key, "Relates")
+                jira.link_issues_for(story_key, bug_key, story_key, "Relates")
             except Exception:
                 pass
 
@@ -198,7 +201,9 @@ def cmd_log_bug(story_key: str | None, spec_file: str | None):
         print(f"  Summary  : {parsed['summary']}")
         if story_key:
             print(f"  Linked to: {story_key}")
-        print(f"  View: https://divami.atlassian.net/browse/{bug_key}")
+        from config import settings
+        base = settings.jira2_base_url if story_key and story_key.split("-")[0].upper() in {"SCRUM"} else settings.jira_base_url
+        print(f"  View: {base}/browse/{bug_key}")
         _sep()
 
     except Exception as e:
