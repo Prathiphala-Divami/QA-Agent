@@ -14,8 +14,8 @@ class Settings(BaseSettings):
     jira2_email: Optional[str] = None
     jira2_api_token: Optional[str] = None
 
-    # Anthropic Claude API
-    anthropic_api_key: str
+    # Groq API
+    groq_api_key: str
 
     class Config:
         env_file = ".env"

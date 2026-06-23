@@ -232,33 +232,57 @@ def _extract_text_from_adf(node: dict) -> str:
     return "\n".join(p for p in parts if p)
 
 
+def _extract_sections_from_adf(node: dict) -> dict:
+    """Extract named sections (by heading) from an ADF document."""
+    sections: dict[str, str] = {}
+    current = None
+    for child in node.get("content", []):
+        if child.get("type") == "heading":
+            current = _extract_text_from_adf(child)
+            sections[current] = ""
+        elif current is not None:
+            text = _extract_text_from_adf(child)
+            if text:
+                sections[current] = (sections[current] + "\n" + text).strip()
+    return sections
+
+
 def _get_project_key_from_issue(story_key: str) -> str:
     """Extract project key from issue key e.g. QI-19 → QI."""
     return story_key.split("-")[0]
 
 
-def _has_qality_test(project_key: str) -> bool:
-    """Check if the project has the QAlity Test issue type."""
-    with _client() as c:
-        r = c.get(f"{API}/issue/createmeta", params={"projectKeys": project_key, "expand": "projects.issuetypes"})
-        r.raise_for_status()
-        projects = r.json().get("projects", [])
-        if not projects:
-            return False
-        names = [it["name"] for it in projects[0].get("issuetypes", [])]
-        return "QAlity Test" in names
+def _resolve_issuetype(story_key: str) -> dict:
+    """Return the best available issue type for a test case in this project."""
+    project_key = _get_project_key_from_issue(story_key)
+    client, api = _client_for(story_key)
+    try:
+        with client as c:
+            r = c.get(f"{api}/issue/createmeta", params={"projectKeys": project_key, "expand": "projects.issuetypes"})
+            r.raise_for_status()
+            projects = r.json().get("projects", [])
+            if not projects:
+                return {"name": "Subtask"}
+            issue_types = projects[0].get("issuetypes", [])
+            names = [it["name"] for it in issue_types]
+            if "QAlity Test" in names:
+                return {"id": QALITY_TEST_ISSUE_TYPE_ID}
+            # Find the subtask type — name varies by Jira instance
+            for candidate in ("Subtask", "Sub-task", "Sub-Task"):
+                if candidate in names:
+                    return {"name": candidate}
+    except Exception:
+        pass
+    return {"name": "Subtask"}
 
 
 def create_test_case(story_key: str, tc: dict) -> dict:
-    """Create a test case issue in Jira linked to the given story.
-    Uses QAlity Test if available, otherwise falls back to Sub-task."""
+    """Create a test case issue in Jira linked to the given story."""
     project_key = _get_project_key_from_issue(story_key)
+    client, api = _client_for(story_key)
     priority_map = {"High": "High", "Medium": "Medium", "Low": "Low"}
 
-    if _has_qality_test(project_key):
-        issuetype: dict = {"id": QALITY_TEST_ISSUE_TYPE_ID}
-    else:
-        issuetype = {"name": "Sub-task"}
+    issuetype = _resolve_issuetype(story_key)
 
     payload = {
         "fields": {
@@ -271,10 +295,30 @@ def create_test_case(story_key: str, tc: dict) -> dict:
             "parent": {"key": story_key},
         }
     }
-    with _client() as c:
-        r = c.post(f"{API}/issue", json=payload)
+    with client as c:
+        r = c.post(f"{api}/issue", json=payload)
         r.raise_for_status()
         return r.json()
+
+
+def fetch_test_cases_for_story(story_key: str) -> list[dict]:
+    """Fetch all sub-tasks / QAlity Test issues logged under a story."""
+    issue = get_issue(story_key)
+    subtasks = issue.get("fields", {}).get("subtasks", [])
+    result = []
+    for st in subtasks:
+        detail = get_issue(st["key"])
+        fields = detail.get("fields", {})
+        sections = _extract_sections_from_adf(fields.get("description") or {})
+        title = fields.get("summary", "").removeprefix("[TC] ")
+        result.append({
+            "key": st["key"],
+            "title": title,
+            "objective": sections.get("Objective", ""),
+            "steps": sections.get("Test Steps", ""),
+            "expected_result": sections.get("Expected Result", ""),
+        })
+    return result
 
 
 # ── Attachments ────────────────────────────────────────────────────────────────

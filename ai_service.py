@@ -1,29 +1,56 @@
 from __future__ import annotations
 import json
-import anthropic
+from groq import Groq
 from config import settings
 
-_client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-MODEL = "claude-sonnet-4-6"
+_client = Groq(api_key=settings.groq_api_key)
+MODEL = "llama-3.3-70b-versatile"
 
 
 def _ask(system: str, user: str) -> str:
-    msg = _client.messages.create(
+    msg = _client.chat.completions.create(
         model=MODEL,
         max_tokens=4096,
-        system=system,
-        messages=[{"role": "user", "content": user}],
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
     )
-    return msg.content[0].text
+    return msg.choices[0].message.content
 
 
 def _ask_json(system: str, user: str) -> dict | list:
     raw = _ask(system, user + "\n\nRespond with valid JSON only. No markdown, no explanation.")
-    # Strip markdown fences if model adds them
     raw = raw.strip()
     if raw.startswith("```"):
         raw = raw.split("\n", 1)[1].rsplit("```", 1)[0].strip()
     return json.loads(raw)
+
+
+# ── Intent Detection ──────────────────────────────────────────────────────────
+
+INTENT_SYSTEM = """
+You are an intent router for a QA CLI tool.
+Parse the user's natural language prompt and return JSON:
+{
+  "intent": "test-cases | bug | test-cycle",
+  "story_key": "e.g. IIRM-9566 or SCRUM-5, or null",
+  "cycle_name": "e.g. Build 1 — only for test-cycle intent, or null",
+  "spec_file": "path/to/file.txt if mentioned, or null",
+  "use_jira_only": true or false
+}
+
+Rules:
+- "test-cases": user wants to generate or create test cases
+- "bug": user wants to log, report, or create a bug
+- "test-cycle": user wants to start, run, or manage a test cycle or build
+If no cycle name mentioned, default to "Build 1".
+If no spec file and not told to use Jira description only, set use_jira_only to true.
+"""
+
+
+def detect_intent(prompt: str) -> dict:
+    return _ask_json(INTENT_SYSTEM, f"User prompt: {prompt}")
 
 
 # ── Bug Logging ────────────────────────────────────────────────────────────────
@@ -42,8 +69,6 @@ Return a JSON object with these exact keys:
   "environment": "browser/OS/version if mentioned, else 'Not specified'",
   "suggested_category": "Functional | UI/UX | Performance | Security | Data | Integration | Usability | Accessibility | Other"
 }
-
-For suggested_category, pick the one that best fits the bug based on its description.
 """
 
 
@@ -81,7 +106,7 @@ def generate_test_cases(feature_description: str) -> list[dict]:
     result = _ask_json(TEST_CASE_SYSTEM, f"Feature/ticket description:\n{feature_description}")
     if isinstance(result, dict) and "test_cases" in result:
         return result["test_cases"]
-    return result  # already a list
+    return result
 
 
 # ── Test Execution Analysis ────────────────────────────────────────────────────
